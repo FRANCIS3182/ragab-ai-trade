@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://FRANCIS3182.github.io/ragab-ai-trade/sitemap.xml
+
+# Allow specific crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+# Disallow spambots
+User-agent: MJ12bot
+Disallow: /
