@@ -56,3 +56,21 @@ async def create_paper_order(
     await db.refresh(order)
 
     return order
+
+@router.get("/orders", response_model=list[OrderResponse])
+async def list_paper_orders(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Order)
+        .join(TradingAccount, TradingAccount.id == Order.trading_account_id)
+        .where(
+            TradingAccount.user_id == current_user.id,
+            TradingAccount.mode == "paper",
+        )
+        .order_by(Order.created_at.desc())
+    )
+
+    return result.scalars().all()
+
