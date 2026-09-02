@@ -55,6 +55,14 @@ class Position(Base):
         Numeric(20, 8),
         nullable=False,
         default=0,
+        server_default="0",
+    )
+
+    realized_pnl: Mapped[Decimal] = mapped_column(
+        Numeric(20, 8),
+        nullable=False,
+        default=0,
+        server_default="0",
     )
 
     status: Mapped[str] = mapped_column(
