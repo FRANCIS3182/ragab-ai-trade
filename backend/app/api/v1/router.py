@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.routes import auth, paper_trading, ai, risk_settings, automation, trading_accounts
+from app.api.v1.routes import auth, paper_trading, positions, ai, risk_settings, automation, trading_accounts
 
 api_router = APIRouter()
 
@@ -9,6 +9,11 @@ api_router.include_router(
     paper_trading.router,
     prefix="/paper",
     tags=["paper trading"],
+)
+api_router.include_router(
+    positions.router,
+    prefix="/paper/positions",
+    tags=["paper positions"],
 )
 api_router.include_router(
     ai.router,
