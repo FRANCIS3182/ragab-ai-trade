@@ -132,7 +132,7 @@ async def close_position(
     position: Position,
     quantity: Decimal,
     exit_price: Decimal,
-) -> Position:
+) -> Decimal:
     if position.status != "open":
         raise ValueError("Position is already closed")
 
@@ -166,7 +166,7 @@ async def close_position(
         )
 
     await db.flush()
-    return position
+    return realized
 
 
 async def execute_opposite_order(
