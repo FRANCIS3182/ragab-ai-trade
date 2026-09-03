@@ -14,6 +14,7 @@ class PositionResponse(BaseModel):
     entry_price: Decimal
     current_price: Decimal
     unrealized_pnl: Decimal
+    realized_pnl: Decimal
     status: str
     opened_at: datetime
     closed_at: datetime | None

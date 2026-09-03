@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -154,9 +155,7 @@ async def close_position(
 
     if position.quantity == 0:
         position.status = "closed"
-        position.closed_at = __import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        )
+        position.closed_at = datetime.now(timezone.utc)
         position.unrealized_pnl = Decimal("0")
     else:
         position.unrealized_pnl = calculate_unrealized_pnl(
@@ -168,3 +167,26 @@ async def close_position(
 
     await db.flush()
     return position
+
+
+async def execute_opposite_order(
+    db: AsyncSession,
+    position: Position,
+    quantity: Decimal,
+    exit_price: Decimal,
+) -> Position:
+    if position.status != "open":
+        raise ValueError("Position is already closed")
+
+    if quantity <= 0:
+        raise ValueError("Quantity must be greater than zero")
+
+    if quantity > position.quantity:
+        raise ValueError("Opposite order quantity exceeds position quantity")
+
+    return await close_position(
+        db=db,
+        position=position,
+        quantity=quantity,
+        exit_price=exit_price,
+    )

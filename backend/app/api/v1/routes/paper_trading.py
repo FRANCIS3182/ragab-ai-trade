@@ -9,6 +9,7 @@ from app.models.order import Order
 from app.models.position import Position
 from app.models.trading_account import TradingAccount
 from app.models.user import User
+from app.services.position_service import add_to_position, get_open_position, close_position
 from app.schemas.order import OrderResponse, PaperOrderCreate
 
 router = APIRouter()
@@ -57,18 +58,58 @@ async def create_paper_order(
     db.add(order)
 
     if payload.price is not None:
-        position = Position(
+        existing_position = await get_open_position(
+            db=db,
             trading_account_id=account.id,
             symbol=symbol,
             side=payload.side,
-            quantity=payload.quantity,
-            entry_price=payload.price,
-            current_price=payload.price,
-            unrealized_pnl=0,
-            status="open",
         )
 
-        db.add(position)
+        if existing_position:
+            await add_to_position(
+                db=db,
+                position=existing_position,
+                quantity=payload.quantity,
+                entry_price=payload.price,
+            )
+        else:
+            opposite_side = "sell" if payload.side == "buy" else "buy"
+
+            opposite_position = await get_open_position(
+                db=db,
+                trading_account_id=account.id,
+                symbol=symbol,
+                side=opposite_side,
+            )
+
+            if opposite_position:
+                if payload.quantity > opposite_position.quantity:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Opposite order exceeds existing position. "
+                        "Position reversal will be enabled in a later step.",
+                    )
+
+                await close_position(
+                    db=db,
+                    position=opposite_position,
+                    quantity=payload.quantity,
+                    exit_price=payload.price,
+                )
+            else:
+                position = Position(
+                    trading_account_id=account.id,
+                    symbol=symbol,
+                    side=payload.side,
+                    quantity=payload.quantity,
+                    entry_price=payload.price,
+                    current_price=payload.price,
+                    unrealized_pnl=0,
+                    realized_pnl=0,
+                    status="open",
+                )
+
+                db.add(position)
 
     await db.commit()
     await db.refresh(order)
