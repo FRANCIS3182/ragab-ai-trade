@@ -90,12 +90,14 @@ async def create_paper_order(
                         "Position reversal will be enabled in a later step.",
                     )
 
-                await close_position(
+                realized_pnl = await close_position(
                     db=db,
                     position=opposite_position,
                     quantity=payload.quantity,
                     exit_price=payload.price,
                 )
+
+                account.balance = (account.balance or 0) + realized_pnl
             else:
                 position = Position(
                     trading_account_id=account.id,
