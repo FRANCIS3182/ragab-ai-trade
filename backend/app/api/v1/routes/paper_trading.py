@@ -10,6 +10,7 @@ from app.models.position import Position
 from app.models.trading_account import TradingAccount
 from app.models.user import User
 from app.services.position_service import add_to_position, get_open_position, close_position
+from app.services.risk_service import validate_paper_order_risk
 from app.schemas.order import OrderResponse, PaperOrderCreate
 
 router = APIRouter()
@@ -45,6 +46,17 @@ async def create_paper_order(
         )
 
     symbol = payload.symbol.upper()
+
+    try:
+        await validate_paper_order_risk(
+            db=db,
+            trading_account_id=account.id,
+            symbol=symbol,
+            side=payload.side,
+            quantity=payload.quantity,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     order = Order(
         trading_account_id=account.id,
