@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -51,6 +52,50 @@ async def validate_paper_order_risk(
         trading_account_id=trading_account_id,
     )
 
+    account_result = await db.execute(
+        select(TradingAccount).where(
+            TradingAccount.id == trading_account_id
+        )
+    )
+
+    account = account_result.scalar_one_or_none()
+
+    if account is None:
+        raise ValueError("Trading account not found")
+
+    balance = account.balance or Decimal("0")
+
+    day_start = datetime.now(timezone.utc).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    daily_loss_result = await db.execute(
+        select(func.coalesce(func.sum(Position.realized_pnl), 0)).where(
+            Position.trading_account_id == trading_account_id,
+            Position.closed_at >= day_start,
+            Position.status == "closed",
+            Position.realized_pnl < 0,
+        )
+    )
+
+    daily_loss = abs(
+        daily_loss_result.scalar_one() or Decimal("0")
+    )
+
+    maximum_daily_loss = (
+        balance * setting.max_daily_loss_pct / Decimal("100")
+    )
+
+    if daily_loss >= maximum_daily_loss:
+        raise ValueError(
+            "Daily loss limit reached: "
+            f"{setting.max_daily_loss_pct}% "
+            f"(${maximum_daily_loss:.2f})"
+        )
+
     if stop_loss is not None:
         if price is None:
             raise ValueError(
@@ -67,18 +112,6 @@ async def validate_paper_order_risk(
                 "Sell stop-loss must be above the entry price"
             )
 
-        account_result = await db.execute(
-            select(TradingAccount).where(
-                TradingAccount.id == trading_account_id
-            )
-        )
-
-        account = account_result.scalar_one_or_none()
-
-        if account is None:
-            raise ValueError("Trading account not found")
-
-        balance = account.balance or Decimal("0")
         maximum_risk = (
             balance * setting.max_risk_per_trade_pct / Decimal("100")
         )
