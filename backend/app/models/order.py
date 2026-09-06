@@ -53,6 +53,11 @@ class Order(Base):
         nullable=True,
     )
 
+    stop_loss: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 8),
+        nullable=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,

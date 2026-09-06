@@ -54,6 +54,8 @@ async def create_paper_order(
             symbol=symbol,
             side=payload.side,
             quantity=payload.quantity,
+            price=payload.price,
+            stop_loss=payload.stop_loss,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -64,6 +66,7 @@ async def create_paper_order(
         side=payload.side,
         quantity=payload.quantity,
         price=payload.price,
+        stop_loss=payload.stop_loss,
         status="simulated",
     )
 
