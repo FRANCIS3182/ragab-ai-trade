@@ -65,6 +65,21 @@ async def validate_paper_order_risk(
 
     balance = account.balance or Decimal("0")
 
+    unrealized_result = await db.execute(
+        select(
+            func.coalesce(
+                func.sum(Position.unrealized_pnl),
+                Decimal("0"),
+            )
+        ).where(
+            Position.trading_account_id == account.id,
+            Position.status == "open",
+        )
+    )
+
+    unrealized_pnl = unrealized_result.scalar_one() or Decimal("0")
+    equity = balance + unrealized_pnl
+
     day_start = datetime.now(timezone.utc).replace(
         hour=0,
         minute=0,
@@ -113,7 +128,7 @@ async def validate_paper_order_risk(
             )
 
         maximum_risk = (
-            balance * setting.max_risk_per_trade_pct / Decimal("100")
+            equity * setting.max_risk_per_trade_pct / Decimal("100")
         )
 
         risk_per_unit = abs(price - stop_loss)
