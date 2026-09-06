@@ -8,6 +8,7 @@ class PaperOrderCreate(BaseModel):
     side: str = Field(pattern="^(buy|sell)$")
     quantity: Decimal = Field(gt=0)
     price: Decimal | None = Field(default=None, gt=0)
+    stop_loss: Decimal | None = Field(default=None, gt=0)
 
 class OrderResponse(BaseModel):
     id: UUID
@@ -15,4 +16,5 @@ class OrderResponse(BaseModel):
     side: str
     quantity: Decimal
     price: Decimal | None
+    stop_loss: Decimal | None
     status: str
