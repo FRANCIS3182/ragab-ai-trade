@@ -51,6 +51,11 @@ class Position(Base):
         nullable=False,
     )
 
+    stop_loss: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 8),
+        nullable=True,
+    )
+
     unrealized_pnl: Mapped[Decimal] = mapped_column(
         Numeric(20, 8),
         nullable=False,

@@ -121,6 +121,7 @@ async def create_paper_order(
                     quantity=payload.quantity,
                     entry_price=payload.price,
                     current_price=payload.price,
+                    stop_loss=payload.stop_loss,
                     unrealized_pnl=0,
                     realized_pnl=0,
                     status="open",
