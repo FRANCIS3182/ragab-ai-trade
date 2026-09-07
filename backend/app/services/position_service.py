@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.position import Position
 from app.models.realized_pnl_event import RealizedPnlEvent
+from app.models.trading_account import TradingAccount
 
 
 def calculate_unrealized_pnl(
@@ -55,12 +56,23 @@ async def update_position_price(
         stop_loss=position.stop_loss,
         current_price=current_price,
     ):
-        await close_position(
+        realized = await close_position(
             db=db,
             position=position,
             quantity=position.quantity,
             exit_price=current_price,
         )
+
+        account_result = await db.execute(
+            select(TradingAccount).where(
+                TradingAccount.id == position.trading_account_id,
+            )
+        )
+        account = account_result.scalar_one()
+
+        account.balance = (account.balance or Decimal("0")) + realized
+
+        await db.flush()
         return position
 
     position.unrealized_pnl = calculate_unrealized_pnl(

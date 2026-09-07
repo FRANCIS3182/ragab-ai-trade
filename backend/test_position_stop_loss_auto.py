@@ -55,6 +55,7 @@ async def main():
         assert position.quantity == Decimal("0"), position.quantity
         assert position.realized_pnl == Decimal("-10"), position.realized_pnl
         assert position.closed_at is not None
+        assert account.balance == Decimal("9990"), account.balance
 
         print("AUTO_STOP_LOSS_TEST_OK")
         print(f"REALIZED P/L: {position.realized_pnl}")
