@@ -45,7 +45,24 @@ async def update_position_price(
     position: Position,
     current_price: Decimal,
 ) -> Position:
+    if position.status != "open":
+        raise ValueError("Cannot update a closed position")
+
     position.current_price = current_price
+
+    if is_stop_loss_triggered(
+        side=position.side,
+        stop_loss=position.stop_loss,
+        current_price=current_price,
+    ):
+        await close_position(
+            db=db,
+            position=position,
+            quantity=position.quantity,
+            exit_price=current_price,
+        )
+        return position
+
     position.unrealized_pnl = calculate_unrealized_pnl(
         side=position.side,
         quantity=position.quantity,
@@ -199,3 +216,19 @@ async def execute_opposite_order(
         quantity=quantity,
         exit_price=exit_price,
     )
+
+def is_stop_loss_triggered(
+    side: str,
+    stop_loss: Decimal | None,
+    current_price: Decimal,
+) -> bool:
+    if stop_loss is None:
+        return False
+
+    if side == "buy":
+        return current_price <= stop_loss
+
+    if side == "sell":
+        return current_price >= stop_loss
+
+    raise ValueError("Position side must be buy or sell")
