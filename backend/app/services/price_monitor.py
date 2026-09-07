@@ -1,3 +1,4 @@
+from asyncio import CancelledError, sleep
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,6 +15,9 @@ class PriceMonitor:
         provider: MarketDataProvider,
         interval_seconds: float = 1.0,
     ) -> None:
+        if interval_seconds <= 0:
+            raise ValueError("interval_seconds must be greater than zero")
+
         self.provider = provider
         self.interval_seconds = interval_seconds
 
@@ -59,3 +63,21 @@ class PriceMonitor:
         await db.commit()
 
         return updated
+
+    async def run(
+        self,
+        db: AsyncSession,
+        trading_account_id: UUID,
+    ) -> None:
+        try:
+            while True:
+                await self.run_once(
+                    db,
+                    trading_account_id,
+                )
+
+                await sleep(self.interval_seconds)
+
+        except CancelledError:
+            await db.rollback()
+            raise
