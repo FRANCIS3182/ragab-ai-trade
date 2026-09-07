@@ -4,3 +4,5 @@ from app.models import order
 from app.models import signal
 from app.models import risk_setting
 from app.models import position
+
+from app.models import realized_pnl_event

@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.position import Position
+from app.models.realized_pnl_event import RealizedPnlEvent
 from app.models.risk_setting import RiskSetting
 from app.models.trading_account import TradingAccount
 
@@ -88,11 +89,15 @@ async def validate_paper_order_risk(
     )
 
     daily_loss_result = await db.execute(
-        select(func.coalesce(func.sum(Position.realized_pnl), 0)).where(
-            Position.trading_account_id == trading_account_id,
-            Position.closed_at >= day_start,
-            Position.status == "closed",
-            Position.realized_pnl < 0,
+        select(
+            func.coalesce(
+                func.sum(RealizedPnlEvent.realized_pnl),
+                Decimal("0"),
+            )
+        ).where(
+            RealizedPnlEvent.trading_account_id == trading_account_id,
+            RealizedPnlEvent.realized_at >= day_start,
+            RealizedPnlEvent.realized_pnl < 0,
         )
     )
 

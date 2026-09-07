@@ -6,8 +6,10 @@ from sqlalchemy import delete, select
 
 from app.db.session import AsyncSessionLocal
 from app.models.position import Position
+from app.models.realized_pnl_event import RealizedPnlEvent
 from app.models.trading_account import TradingAccount
 from app.models.user import User
+from app.services.position_service import close_position
 from app.services.risk_service import validate_paper_order_risk
 
 
@@ -38,18 +40,28 @@ async def main():
             trading_account_id=account.id,
             symbol="XAUUSD",
             side="buy",
-            quantity=Decimal("10"),
+            quantity=Decimal("20"),
             entry_price=Decimal("3400"),
-            current_price=Decimal("3370"),
+            current_price=Decimal("3400"),
             unrealized_pnl=Decimal("0"),
-            realized_pnl=Decimal("-300"),
-            status="closed",
-            closed_at=__import__("datetime").datetime.now(
-                __import__("datetime").timezone.utc
-            ),
+            realized_pnl=Decimal("0"),
+            status="open",
         )
         db.add(losing_position)
         await db.flush()
+
+        realized = await close_position(
+            db=db,
+            position=losing_position,
+            quantity=Decimal("10"),
+            exit_price=Decimal("3370"),
+        )
+        await db.flush()
+
+        assert realized == Decimal("-300"), realized
+        assert losing_position.status == "open"
+        assert losing_position.quantity == Decimal("10")
+        assert losing_position.realized_pnl == Decimal("-300")
 
         try:
             await validate_paper_order_risk(

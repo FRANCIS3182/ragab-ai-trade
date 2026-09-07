@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.position import Position
+from app.models.realized_pnl_event import RealizedPnlEvent
 
 
 def calculate_unrealized_pnl(
@@ -147,6 +148,14 @@ async def close_position(
         quantity=quantity,
         entry_price=position.entry_price,
         exit_price=exit_price,
+    )
+
+    db.add(
+        RealizedPnlEvent(
+            trading_account_id=position.trading_account_id,
+            position_id=position.id,
+            realized_pnl=realized,
+        )
     )
 
     position.realized_pnl += realized
