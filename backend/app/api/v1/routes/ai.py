@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 from app.ai.analyzer import analyze_market
 
-router = APIRouter(prefix="/ai", tags=["AI"])
+router = APIRouter()
 
 
 class MarketAnalysisRequest(BaseModel):
