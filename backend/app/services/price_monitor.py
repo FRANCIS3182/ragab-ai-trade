@@ -1,4 +1,5 @@
 from asyncio import CancelledError, sleep
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,12 +15,17 @@ class PriceMonitor:
         self,
         provider: MarketDataProvider,
         interval_seconds: float = 1.0,
+        max_price_age_seconds: float = 5.0,
     ) -> None:
         if interval_seconds <= 0:
             raise ValueError("interval_seconds must be greater than zero")
 
+        if max_price_age_seconds <= 0:
+            raise ValueError("max_price_age_seconds must be greater than zero")
+
         self.provider = provider
         self.interval_seconds = interval_seconds
+        self.max_price_age_seconds = max_price_age_seconds
 
     async def update_open_positions(
         self,
@@ -38,7 +44,17 @@ class PriceMonitor:
         updated = 0
 
         for position in positions:
-            market_price = await self.provider.get_price(position.symbol)
+            try:
+                market_price = await self.provider.get_price(position.symbol)
+            except ValueError:
+                continue
+
+            age = (
+                datetime.now(timezone.utc) - market_price.timestamp
+            ).total_seconds()
+
+            if age > self.max_price_age_seconds:
+                continue
 
             await update_position_price(
                 db,
