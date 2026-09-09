@@ -40,3 +40,26 @@ def analyze_market(
         confidence=confidence,
         reason=reason,
     )
+
+
+def analyze_market_history(
+    symbol: str,
+    timeframe: str,
+    prices,
+    period: int,
+) -> MarketAnalysis:
+    from app.ai.indicators import simple_moving_average
+
+    if not prices:
+        raise ValueError("price history cannot be empty")
+
+    mids = [price.mid for price in prices]
+    current_price = mids[-1]
+    moving_average = simple_moving_average(mids, period)
+
+    return analyze_market(
+        symbol=symbol,
+        timeframe=timeframe,
+        price=float(current_price),
+        moving_average=float(moving_average),
+    )

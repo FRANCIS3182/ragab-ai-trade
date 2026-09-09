@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.analyzer import analyze_market
+from app.ai.analyzer import MarketAnalysis, analyze_market
 from app.core.config import settings
 from app.models.order import Order
 from app.models.risk_setting import RiskSetting
@@ -30,7 +30,33 @@ async def run_ai_paper_trade(
     moving_average: Decimal,
     quantity: Decimal,
 ) -> AutomationResult:
+    analysis = analyze_market(
+        symbol=symbol,
+        timeframe=timeframe,
+        price=float(price),
+        moving_average=float(moving_average),
+    )
 
+    return await _execute_ai_analysis(
+        db=db,
+        account=account,
+        symbol=symbol,
+        timeframe=timeframe,
+        price=price,
+        analysis=analysis,
+        quantity=quantity,
+    )
+
+
+async def _execute_ai_analysis(
+    db: AsyncSession,
+    account: TradingAccount,
+    symbol: str,
+    timeframe: str,
+    price: Decimal,
+    analysis: MarketAnalysis,
+    quantity: Decimal,
+) -> AutomationResult:
     if not settings.paper_trading_only:
         raise ValueError("Paper trading safety flag must be enabled")
 
@@ -46,13 +72,6 @@ async def run_ai_paper_trade(
         risk = RiskSetting(trading_account_id=account.id)
         db.add(risk)
         await db.flush()
-
-    analysis = analyze_market(
-        symbol=symbol,
-        timeframe=timeframe,
-        price=float(price),
-        moving_average=float(moving_average),
-    )
 
     signal = Signal(
         symbol=symbol.upper(),
@@ -115,4 +134,36 @@ async def run_ai_paper_trade(
         reason=analysis.reason,
         order_id=str(order.id),
         status="paper_order_created",
+    )
+
+
+async def run_ai_market_driven_paper_trade(
+    db: AsyncSession,
+    account: TradingAccount,
+    provider,
+    symbol: str,
+    timeframe: str,
+    period: int,
+    quantity: Decimal,
+) -> AutomationResult:
+    from app.ai.analyzer import analyze_market_history
+
+    price = await provider.get_price(symbol)
+    history = provider.get_price_history(symbol)
+
+    analysis = analyze_market_history(
+        symbol=symbol,
+        timeframe=timeframe,
+        prices=history,
+        period=period,
+    )
+
+    return await _execute_ai_analysis(
+        db=db,
+        account=account,
+        symbol=symbol,
+        timeframe=timeframe,
+        price=price.mid,
+        analysis=analysis,
+        quantity=quantity,
     )
