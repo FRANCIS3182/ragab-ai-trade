@@ -65,3 +65,31 @@ window.addEventListener('scroll', function() {
 
 // Initialize
 console.log('Ragab AI Trade Website Loaded');
+
+const API_BASE = "http://127.0.0.1:8001";
+
+async function loadTradingDashboard() {
+    const token = localStorage.getItem("ragab_token");
+    const accountId = localStorage.getItem("ragab_ai_trade_account_id");
+
+    if (!token || !accountId) return;
+
+    try {
+        const response = await fetch(
+            `${API_BASE}/api/v1/trading-accounts/${accountId}/summary`,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (!response.ok) throw new Error("Dashboard request failed");
+
+        const account = await response.json();
+        const values = document.querySelectorAll("#dashboard .value");
+
+        if (values[0]) values[0].textContent = `$${Number(account.equity).toFixed(2)}`;
+        if (values[1]) values[1].textContent = `$${Number(account.unrealized_pnl).toFixed(2)} Unrealized`;
+    } catch (error) {
+        console.error("Dashboard error:", error);
+    }
+}
+
+loadTradingDashboard();
