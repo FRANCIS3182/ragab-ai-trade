@@ -94,10 +94,12 @@ async def _execute_ai_analysis(
             status="no_trade",
         )
 
+    from app.models.position import Position
+
     open_positions_result = await db.execute(
-        select(func.count(Order.id)).where(
-            Order.trading_account_id == account.id,
-            Order.status == "simulated",
+        select(func.count(Position.id)).where(
+            Position.trading_account_id == account.id,
+            Position.status == "open",
         )
     )
 

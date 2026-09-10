@@ -3,12 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.api.v1.router import api_router
+from app.services.paper_market_data import PaperMarketDataProvider
 
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="RAGAB AI Trade API — paper-trading foundation.",
 )
+
+app.state.paper_market_data = PaperMarketDataProvider()
 
 app.add_middleware(
     CORSMiddleware,
