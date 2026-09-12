@@ -83,10 +83,51 @@ async function loadTradingDashboard() {
         if (!response.ok) throw new Error("Dashboard request failed");
 
         const account = await response.json();
-        const values = document.querySelectorAll("#dashboard .value");
 
-        if (values[0]) values[0].textContent = `$${Number(account.equity).toFixed(2)}`;
-        if (values[1]) values[1].textContent = `$${Number(account.unrealized_pnl).toFixed(2)} Unrealized`;
+        const positionsResponse = await fetch(
+            `${API_BASE}/api/v1/paper/positions`,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (!positionsResponse.ok) throw new Error("Positions request failed");
+
+        const positions = await positionsResponse.json();
+        const openPositions = positions.filter(position => position.status === "open");
+
+        const signalResponse = await fetch(
+            `${API_BASE}/api/v1/automation/market-signal`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    trading_account_id: accountId,
+                    symbol: "XAUUSD",
+                    timeframe: "M5",
+                    period: 3,
+                    quantity: "1"
+                })
+            }
+        );
+
+        if (!signalResponse.ok) throw new Error("Market signal request failed");
+
+        const signal = await signalResponse.json();
+
+        const equity = document.querySelector("#dashboard-equity");
+        const pnl = document.querySelector("#dashboard-pnl");
+        const openPositionsElement = document.querySelector("#dashboard-open-positions");
+        const buySignal = document.querySelector("#dashboard-buy-signal");
+        const sellSignals = document.querySelector("#dashboard-sell-signals");
+
+        if (equity) equity.textContent = `$${Number(account.equity).toFixed(2)}`;
+        if (pnl) pnl.textContent = `$${Number(account.unrealized_pnl).toFixed(2)} Unrealized`;
+        if (openPositionsElement) openPositionsElement.textContent = openPositions.length;
+
+        if (buySignal) buySignal.textContent = signal.signal === "BUY" ? "BUY" : "--";
+        if (sellSignals) sellSignals.textContent = signal.signal === "SELL" ? "1" : "0";
     } catch (error) {
         console.error("Dashboard error:", error);
     }

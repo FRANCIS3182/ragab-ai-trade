@@ -139,6 +139,25 @@ async def _execute_ai_analysis(
     )
 
 
+async def analyze_ai_market_signal(
+    provider,
+    symbol: str,
+    timeframe: str,
+    period: int,
+):
+    from app.ai.analyzer import analyze_market_history
+
+    await provider.get_price(symbol)
+    history = provider.get_price_history(symbol)
+
+    return analyze_market_history(
+        symbol=symbol,
+        timeframe=timeframe,
+        prices=history,
+        period=period,
+    )
+
+
 async def run_ai_market_driven_paper_trade(
     db: AsyncSession,
     account: TradingAccount,
