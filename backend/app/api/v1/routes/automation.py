@@ -13,6 +13,7 @@ from app.models.user import User
 from app.services.ai_trading import (
     run_ai_paper_trade,
     run_ai_market_driven_paper_trade,
+    analyze_ai_market_signal,
 )
 
 router = APIRouter()
@@ -107,6 +108,32 @@ async def set_market_price(
         "symbol": payload.symbol.upper(),
         "bid": str(payload.bid),
         "ask": str(payload.ask),
+        "execution": "paper_only",
+    }
+
+
+@router.post("/market-signal")
+async def get_market_signal(
+    payload: MarketDrivenAutomationRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    provider = request.app.state.paper_market_data
+
+    try:
+        analysis = await analyze_ai_market_signal(
+            provider=provider,
+            symbol=payload.symbol,
+            timeframe=payload.timeframe,
+            period=payload.period,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    return {
+        "signal": analysis.signal,
+        "confidence": analysis.confidence,
+        "reason": analysis.reason,
         "execution": "paper_only",
     }
 
