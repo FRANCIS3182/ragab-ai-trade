@@ -16,6 +16,22 @@ from app.schemas.trading_account import (
 router = APIRouter()
 
 
+@router.get(
+    "",
+    response_model=list[TradingAccountResponse],
+)
+async def list_trading_accounts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(TradingAccount)
+        .where(TradingAccount.user_id == current_user.id)
+        .order_by(TradingAccount.created_at.asc())
+    )
+    return result.scalars().all()
+
+
 @router.post(
     "",
     response_model=TradingAccountResponse,
