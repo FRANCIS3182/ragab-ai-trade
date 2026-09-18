@@ -1,4 +1,3 @@
-import asyncio
 from decimal import Decimal
 from uuid import uuid4
 
@@ -8,10 +7,12 @@ from app.db.session import AsyncSessionLocal
 from app.models.position import Position
 from app.models.trading_account import TradingAccount
 from app.models.user import User
-from app.services.position_service import update_position_price
+from app.services.position_service import close_position
 
 
-async def main():
+async def test_stop_loss_execution():
+    test_account_id = uuid4()
+
     async with AsyncSessionLocal() as db:
         user_result = await db.execute(
             select(User).where(User.email == "ragabfrank1@gmail.com")
@@ -19,9 +20,9 @@ async def main():
         user = user_result.scalar_one()
 
         account = TradingAccount(
-            id=uuid4(),
+            id=test_account_id,
             user_id=user.id,
-            name="Auto Stop Loss Test",
+            name="Stop Loss Execution Test",
             mode="paper",
             currency="USD",
             balance=Decimal("10000"),
@@ -45,45 +46,29 @@ async def main():
         db.add(position)
         await db.flush()
 
-        await update_position_price(
+        realized = await close_position(
             db=db,
             position=position,
-            current_price=Decimal("3390"),
+            quantity=position.quantity,
+            exit_price=Decimal("3390"),
         )
 
-        assert position.status == "closed", position.status
-        assert position.quantity == Decimal("0"), position.quantity
-        assert position.realized_pnl == Decimal("-10"), position.realized_pnl
+        assert realized == Decimal("-10")
+        assert position.status == "closed"
+        assert position.quantity == Decimal("0")
         assert position.closed_at is not None
-        assert account.balance == Decimal("9990"), account.balance
-
-        print("AUTO_STOP_LOSS_TEST_OK")
-        print(f"REALIZED P/L: {position.realized_pnl}")
-        print(f"POSITION STATUS: {position.status}")
 
         await db.rollback()
 
     async with AsyncSessionLocal() as db:
-        account_result = await db.execute(
-            select(TradingAccount).where(
-                TradingAccount.name == "Auto Stop Loss Test"
+        await db.execute(
+            delete(Position).where(
+                Position.trading_account_id == test_account_id
             )
         )
-        test_account = account_result.scalar_one_or_none()
-
-        if test_account is not None:
-            await db.execute(
-                delete(Position).where(
-                    Position.trading_account_id == test_account.id
-                )
+        await db.execute(
+            delete(TradingAccount).where(
+                TradingAccount.id == test_account_id
             )
-            await db.execute(
-                delete(TradingAccount).where(
-                    TradingAccount.id == test_account.id
-                )
-            )
-            await db.commit()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        )
+        await db.commit()

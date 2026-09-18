@@ -1,4 +1,3 @@
-import asyncio
 from decimal import Decimal
 from uuid import uuid4
 
@@ -6,25 +5,23 @@ from sqlalchemy import delete, select
 
 from app.db.session import AsyncSessionLocal
 from app.models.position import Position
-from app.models.realized_pnl_event import RealizedPnlEvent
 from app.models.trading_account import TradingAccount
 from app.models.user import User
 from app.services.position_service import close_position
 from app.services.risk_service import validate_paper_order_risk
 
 
-USER_EMAIL = "ragabfrank1@gmail.com"
+async def test_daily_loss_limit_blocks_paper_order():
+    test_account_id = uuid4()
 
-
-async def main():
     async with AsyncSessionLocal() as db:
         user_result = await db.execute(
-            select(User).where(User.email == USER_EMAIL)
+            select(User).where(User.email == "ragabfrank1@gmail.com")
         )
         user = user_result.scalar_one()
 
         account = TradingAccount(
-            id=uuid4(),
+            id=test_account_id,
             user_id=user.id,
             name="Daily Loss Integration Test",
             mode="paper",
@@ -58,7 +55,7 @@ async def main():
         )
         await db.flush()
 
-        assert realized == Decimal("-300"), realized
+        assert realized == Decimal("-300")
         assert losing_position.status == "open"
         assert losing_position.quantity == Decimal("10")
         assert losing_position.realized_pnl == Decimal("-300")
@@ -74,11 +71,7 @@ async def main():
                 stop_loss=Decimal("3390"),
             )
         except ValueError as exc:
-            expected = "Daily loss limit reached"
-            assert expected in str(exc), str(exc)
-            print("DAILY_LOSS_INTEGRATION_TEST_OK")
-            print(f"DAILY LOSS: $300.00")
-            print("LIMIT: $300.00")
+            assert "Daily loss limit reached" in str(exc)
         else:
             raise AssertionError(
                 "Order was accepted after the 3% daily loss limit was reached"
@@ -87,26 +80,14 @@ async def main():
         await db.rollback()
 
     async with AsyncSessionLocal() as db:
-        account_result = await db.execute(
-            select(TradingAccount).where(
-                TradingAccount.name == "Daily Loss Integration Test"
+        await db.execute(
+            delete(Position).where(
+                Position.trading_account_id == test_account_id
             )
         )
-        test_account = account_result.scalar_one_or_none()
-
-        if test_account is not None:
-            await db.execute(
-                delete(Position).where(
-                    Position.trading_account_id == test_account.id
-                )
+        await db.execute(
+            delete(TradingAccount).where(
+                TradingAccount.id == test_account_id
             )
-            await db.execute(
-                delete(TradingAccount).where(
-                    TradingAccount.id == test_account.id
-                )
-            )
-            await db.commit()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        )
+        await db.commit()

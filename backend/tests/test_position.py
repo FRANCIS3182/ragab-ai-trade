@@ -7,7 +7,7 @@ from app.services.position_service import (
 )
 
 
-def main():
+def test_position_pnl_and_weighted_entry():
     realized = calculate_realized_pnl(
         side="buy",
         quantity=Decimal("0.005"),
@@ -32,12 +32,3 @@ def main():
     assert realized == Decimal("0.050")
     assert unrealized == Decimal("0.050")
     assert average == Decimal("3410")
-
-    print("POSITION_TEST_OK")
-    print(f"REALIZED P/L: {realized}")
-    print(f"UNREALIZED P/L: {unrealized}")
-    print(f"WEIGHTED ENTRY: {average}")
-
-
-if __name__ == "__main__":
-    main()

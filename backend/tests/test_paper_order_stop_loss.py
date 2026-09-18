@@ -1,4 +1,3 @@
-import asyncio
 from decimal import Decimal
 from uuid import uuid4
 
@@ -15,7 +14,9 @@ from app.schemas.order import PaperOrderCreate
 USER_EMAIL = "ragabfrank1@gmail.com"
 
 
-async def main():
+async def test_paper_order_creates_position_with_stop_loss():
+    test_account_id = uuid4()
+
     async with AsyncSessionLocal() as db:
         user_result = await db.execute(
             select(User).where(User.email == USER_EMAIL)
@@ -23,7 +24,7 @@ async def main():
         user = user_result.scalar_one()
 
         account = TradingAccount(
-            id=uuid4(),
+            id=test_account_id,
             user_id=user.id,
             name="Position Stop Loss Integration Test",
             mode="paper",
@@ -49,7 +50,7 @@ async def main():
             current_user=user,
         )
 
-        assert order.stop_loss == Decimal("3390"), order.stop_loss
+        assert order.stop_loss == Decimal("3390")
 
         position_result = await db.execute(
             select(Position).where(
@@ -59,35 +60,19 @@ async def main():
         )
         position = position_result.scalar_one()
 
-        assert position.stop_loss == Decimal("3390"), position.stop_loss
-
-        print("PAPER_ORDER_STOP_LOSS_INTEGRATION_TEST_OK")
-        print(f"ORDER STOP LOSS: {order.stop_loss}")
-        print(f"POSITION STOP LOSS: {position.stop_loss}")
+        assert position.stop_loss == Decimal("3390")
 
         await db.rollback()
 
     async with AsyncSessionLocal() as db:
-        account_result = await db.execute(
-            select(TradingAccount).where(
-                TradingAccount.name == "Position Stop Loss Integration Test"
+        await db.execute(
+            delete(Position).where(
+                Position.trading_account_id == test_account_id
             )
         )
-        test_account = account_result.scalar_one_or_none()
-
-        if test_account is not None:
-            await db.execute(
-                delete(Position).where(
-                    Position.trading_account_id == test_account.id
-                )
+        await db.execute(
+            delete(TradingAccount).where(
+                TradingAccount.id == test_account_id
             )
-            await db.execute(
-                delete(TradingAccount).where(
-                    TradingAccount.id == test_account.id
-                )
-            )
-            await db.commit()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        )
+        await db.commit()
