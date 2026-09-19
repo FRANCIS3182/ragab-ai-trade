@@ -1,15 +1,13 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.analyzer import MarketAnalysis, analyze_market
 from app.core.config import settings
-from app.models.order import Order
-from app.models.risk_setting import RiskSetting
 from app.models.signal import Signal
 from app.models.trading_account import TradingAccount
+from app.services.paper_execution import execute_paper_order
 
 
 @dataclass
@@ -29,6 +27,7 @@ async def run_ai_paper_trade(
     price: Decimal,
     moving_average: Decimal,
     quantity: Decimal,
+    stop_loss: Decimal | None = None,
 ) -> AutomationResult:
     analysis = analyze_market(
         symbol=symbol,
@@ -45,6 +44,7 @@ async def run_ai_paper_trade(
         price=price,
         analysis=analysis,
         quantity=quantity,
+        stop_loss=stop_loss,
     )
 
 
@@ -56,22 +56,10 @@ async def _execute_ai_analysis(
     price: Decimal,
     analysis: MarketAnalysis,
     quantity: Decimal,
+    stop_loss: Decimal | None = None,
 ) -> AutomationResult:
     if not settings.paper_trading_only:
         raise ValueError("Paper trading safety flag must be enabled")
-
-    risk_result = await db.execute(
-        select(RiskSetting).where(
-            RiskSetting.trading_account_id == account.id
-        )
-    )
-
-    risk = risk_result.scalar_one_or_none()
-
-    if risk is None:
-        risk = RiskSetting(trading_account_id=account.id)
-        db.add(risk)
-        await db.flush()
 
     signal = Signal(
         symbol=symbol.upper(),
@@ -94,41 +82,19 @@ async def _execute_ai_analysis(
             status="no_trade",
         )
 
-    from app.models.position import Position
-
-    open_positions_result = await db.execute(
-        select(func.count(Position.id)).where(
-            Position.trading_account_id == account.id,
-            Position.status == "open",
+    try:
+        order = await execute_paper_order(
+            db=db,
+            account=account,
+            symbol=symbol,
+            side=analysis.signal.lower(),
+            quantity=quantity,
+            price=price,
+            stop_loss=stop_loss,
         )
-    )
-
-    open_positions = open_positions_result.scalar() or 0
-
-    if open_positions >= risk.max_open_positions:
-        await db.commit()
-
-        return AutomationResult(
-            signal=analysis.signal,
-            confidence=analysis.confidence,
-            reason="Maximum open paper positions reached.",
-            order_id=None,
-            status="risk_blocked",
-        )
-
-    order = Order(
-        trading_account_id=account.id,
-        symbol=symbol.upper(),
-        side=analysis.signal.lower(),
-        quantity=quantity,
-        price=price,
-        status="simulated",
-    )
-
-    db.add(order)
-
-    await db.commit()
-    await db.refresh(order)
+    except ValueError:
+        await db.rollback()
+        raise
 
     return AutomationResult(
         signal=analysis.signal,
@@ -166,6 +132,7 @@ async def run_ai_market_driven_paper_trade(
     timeframe: str,
     period: int,
     quantity: Decimal,
+    stop_loss: Decimal | None = None,
 ) -> AutomationResult:
     from app.ai.analyzer import analyze_market_history
 
@@ -187,4 +154,5 @@ async def run_ai_market_driven_paper_trade(
         price=price.mid,
         analysis=analysis,
         quantity=quantity,
+        stop_loss=stop_loss,
     )

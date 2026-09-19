@@ -31,6 +31,7 @@ class MarketDrivenAutomationRequest(BaseModel):
     timeframe: str = Field(min_length=1, max_length=10)
     period: int = Field(gt=0, le=200)
     quantity: Decimal = Field(gt=0)
+    stop_loss: Decimal | None = Field(default=None, gt=0)
 
 
 class AutomationRequest(BaseModel):
@@ -40,6 +41,7 @@ class AutomationRequest(BaseModel):
     price: Decimal = Field(gt=0)
     moving_average: Decimal = Field(gt=0)
     quantity: Decimal = Field(gt=0)
+    stop_loss: Decimal | None = Field(default=None, gt=0)
 
 
 @router.post("/run")
@@ -74,6 +76,7 @@ async def run_automation(
             price=payload.price,
             moving_average=payload.moving_average,
             quantity=payload.quantity,
+            stop_loss=payload.stop_loss,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -173,6 +176,7 @@ async def run_market_driven_automation(
             timeframe=payload.timeframe,
             period=payload.period,
             quantity=payload.quantity,
+            stop_loss=payload.stop_loss,
         )
     except ValueError as exc:
         raise HTTPException(
