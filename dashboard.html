@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAGAB AI Trade – Control Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    .subtitle { color: var(--muted); margin-bottom: 28px; font-size: 0.95rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card h2 { font-size: 1.05rem; margin-bottom: 16px; color: var(--text); }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+    input, select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 0.95rem;
+    }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    button:hover { opacity: 0.9; }
+    button.secondary { background: transparent; border: 1px solid var(--border); }
+    button.danger { background: var(--red); }
+    .status-bar {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .pill {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+    }
+    .pill span { color: var(--muted); margin-right: 6px; }
+    .pill.ok { border-color: var(--green); }
+    .pill.warn { border-color: var(--yellow); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge.buy { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge.sell { background: rgba(239,68,68,0.15); color: var(--red); }
+    .badge.hold { background: rgba(234,179,8,0.15); color: var(--yellow); }
+    .actions { display: flex; gap: 8px; }
+    .full { grid-column: 1 / -1; }
+    .note { font-size: 0.8rem; color: var(--muted); margin-top: 12px; }
+    #log {
+      background: #0a0e14;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+      max-height: 220px;
+      overflow-y: auto;
+      color: #a5b4c8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>RAGAB AI Trade</h1>
+    <p class="subtitle">Personal Automation Control · Paper Trading Only</p>
+
+    <div class="status-bar" id="statusBar">
+      <div class="pill" id="healthPill"><span>API</span> checking…</div>
+      <div class="pill" id="enginePill"><span>Engine</span> —</div>
+      <div class="pill" id="jobsPill"><span>Jobs</span> 0</div>
+    </div>
+
+    <div class="grid">
+      <!-- Start Job -->
+      <div class="card">
+        <h2>Start Automation Job</h2>
+        <label>Trading Account ID (UUID)</label>
+        <input id="accountId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+
+        <label>Symbol</label>
+        <input id="symbol" value="BTCUSDT" />
+
+        <label>Timeframe</label>
+        <select id="timeframe">
+          <option value="5m">5m</option>
+          <option value="15m" selected>15m</option>
+          <option value="1h">1h</option>
+          <option value="4h">4h</option>
+        </select>
+
+        <label>Interval (seconds)</label>
+        <input id="interval" type="number" value="300" min="60" max="3600" />
+
+        <label>Auth Token (JWT)</label>
+        <input id="token" type="password" placeholder="Paste your access token" />
+
+        <button onclick="startJob()">Start Job</button>
+        <p class="note">Default risk: 1% per trade · 3% daily loss limit · max 5 positions</p>
+      </div>
+
+      <!-- Quick Signal -->
+      <div class="card">
+        <h2>Quick Market Signal</h2>
+        <label>Symbol</label>
+        <input id="signalSymbol" value="BTCUSDT" />
+        <label>Period</label>
+        <input id="signalPeriod" type="number" value="20" />
+        <button onclick="getSignal()">Analyze Now</button>
+        <div id="signalResult" style="margin-top:16px;font-size:0.9rem;"></div>
+      </div>
+
+      <!-- Active Jobs -->
+      <div class="card full">
+        <h2>Active Jobs</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Symbol</th>
+              <th>TF</th>
+              <th>Status</th>
+              <th>Last Signal</th>
+              <th>Runs</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="jobsBody">
+            <tr><td colspan="7" style="color:var(--muted)">No jobs yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Log -->
+      <div class="card full">
+        <h2>Activity Log</h2>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = "http://localhost:8000/api/v1";
+
+    function log(msg) {
+      const el = document.getElementById("log");
+      const time = new Date().toLocaleTimeString();
+      el.innerHTML = `[${time}] ${msg}<br>` + el.innerHTML;
+    }
+
+    function token() {
+      return document.getElementById("token").value.trim();
+    }
+
+    function headers() {
+      const h = { "Content-Type": "application/json" };
+      const t = token();
+      if (t) h["Authorization"] = `Bearer ${t}`;
+      return h;
+    }
+
+    async function refreshHealth() {
+      try {
+        const res = await fetch("http://localhost:8000/health");
+        const data = await res.json();
+        const health = document.getElementById("healthPill");
+        const engine = document.getElementById("enginePill");
+        const jobs = document.getElementById("jobsPill");
+
+        health.innerHTML = `<span>API</span> ${data.status}`;
+        health.className = "pill ok";
+
+        engine.innerHTML = `<span>Engine</span> ${data.automation_running ? "Running" : "Stopped"}`;
+        engine.className = data.automation_running ? "pill ok" : "pill warn";
+
+        jobs.innerHTML = `<span>Jobs</span> ${data.active_jobs}`;
+      } catch (e) {
+        document.getElementById("healthPill").innerHTML = `<span>API</span> offline`;
+        document.getElementById("healthPill").className = "pill";
+      }
+    }
+
+    async function refreshJobs() {
+      try {
+        const res = await fetch(`${API}/automation/jobs`, { headers: headers() });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        const tbody = document.getElementById("jobsBody");
+
+        if (!data.jobs || data.jobs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" style="color:var(--muted)">No jobs yet</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.jobs.map(j => {
+          const sig = j.last_result?.signal || "—";
+          const badgeClass = sig === "BUY" ? "buy" : sig === "SELL" ? "sell" : "hold";
+          return `
+            <tr>
+              <td style="font-size:0.75rem;max-width:180px;overflow:hidden;text-overflow:ellipsis">${j.key}</td>
+              <td>${j.symbol}</td>
+              <td>${j.timeframe}</td>
+              <td>${j.enabled ? "🟢 On" : "⏸ Off"}</td>
+              <td><span class="badge ${badgeClass}">${sig}</span></td>
+              <td>${j.run_count}</td>
+              <td class="actions">
+                <button class="secondary" onclick="toggleJob('${j.key}', ${j.enabled})">${j.enabled ? "Stop" : "Enable"}</button>
+                <button class="danger" onclick="deleteJob('${j.key}')">Delete</button>
+              </td>
+            </tr>`;
+        }).join("");
+      } catch (e) {
+        log("Failed to load jobs: " + e.message);
+      }
+    }
+
+    async function startJob() {
+      const body = {
+        trading_account_id: document.getElementById("accountId").value.trim(),
+        symbol: document.getElementById("symbol").value.trim(),
+        timeframe: document.getElementById("timeframe").value,
+        interval_seconds: parseInt(document.getElementById("interval").value, 10),
+        period: 20
+      };
+
+      try {
+        const res = await fetch(`${API}/automation/jobs/start`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        log(`Job started: ${data.job_key}`);
+        refreshJobs();
+        refreshHealth();
+      } catch (e) {
+        log("Start failed: " + e.message);
+        alert(e.message);
+      }
+    }
+
+    async function toggleJob(key, currentlyEnabled) {
+      const endpoint = currentlyEnabled ? "stop" : "enable";
+      try {
+        const res = await fetch(`${API}/automation/jobs/${encodeURIComponent(key)}/${endpoint}`, {
+          method: "POST",
+          headers: headers()
+        });
+        if (!res.ok) throw new Error(await res.text());
+        log(`Job ${endpoint}: ${key}`);
+        refreshJobs();
+      } catch (e) {
+        log(e.message);
+      }
+    }
+
+    async function deleteJob(key) {
+      if (!confirm("Delete this job?")) return;
+      try {
+        const res = await fetch(`${API}/automation/jobs/${encodeURIComponent(key)}`, {
+          method: "DELETE",
+          headers: headers()
+        });
+        if (!res.ok) throw new Error(await res.text());
+        log(`Deleted: ${key}`);
+        refreshJobs();
+        refreshHealth();
+      } catch (e) {
+        log(e.message);
+      }
+    }
+
+    async function getSignal() {
+      const body = {
+        trading_account_id: document.getElementById("accountId").value.trim() || "00000000-0000-0000-0000-000000000000",
+        symbol: document.getElementById("signalSymbol").value.trim(),
+        timeframe: "15m",
+        period: parseInt(document.getElementById("signalPeriod").value, 10)
+      };
+
+      try {
+        const res = await fetch(`${API}/automation/market-signal`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+
+        document.getElementById("signalResult").innerHTML = `
+          <div><strong>Signal:</strong> <span class="badge ${data.signal.toLowerCase()}">${data.signal}</span></div>
+          <div><strong>Confidence:</strong> ${(data.confidence * 100).toFixed(1)}%</div>
+          <div><strong>RSI:</strong> ${data.rsi?.toFixed(1) ?? "—"}</div>
+          <div><strong>Trend:</strong> ${data.trend ?? "—"}</div>
+          <div style="margin-top:8px;color:var(--muted);font-size:0.8rem">${data.reason}</div>
+        `;
+        log(`Signal ${data.signal} @ ${(data.confidence*100).toFixed(0)}% for ${body.symbol}`);
+      } catch (e) {
+        log("Signal error: " + e.message);
+        document.getElementById("signalResult").innerHTML = `<span style="color:var(--red)">${e.message}</span>`;
+      }
+    }
+
+    // Auto refresh
+    refreshHealth();
+    setInterval(refreshHealth, 10000);
+    setInterval(refreshJobs, 15000);
+  </script>
+</body>
+</html>
