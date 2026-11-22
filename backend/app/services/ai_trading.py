@@ -3,11 +3,12 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.analyzer import MarketAnalysis, analyze_market
+from app.ai.analyzer import MarketAnalysis, analyze_market, analyze_market_history
 from app.core.config import settings
 from app.models.signal import Signal
 from app.models.trading_account import TradingAccount
 from app.services.paper_execution import execute_paper_order
+from app.services.risk_service import calculate_position_size
 
 
 @dataclass
@@ -17,6 +18,10 @@ class AutomationResult:
     reason: str
     order_id: str | None
     status: str
+    quantity: Decimal | None = None
+    stop_loss: Decimal | None = None
+    rsi: float | None = None
+    trend: str | None = None
 
 
 async def run_ai_paper_trade(
@@ -26,7 +31,7 @@ async def run_ai_paper_trade(
     timeframe: str,
     price: Decimal,
     moving_average: Decimal,
-    quantity: Decimal,
+    quantity: Decimal | None = None,
     stop_loss: Decimal | None = None,
 ) -> AutomationResult:
     analysis = analyze_market(
@@ -55,7 +60,7 @@ async def _execute_ai_analysis(
     timeframe: str,
     price: Decimal,
     analysis: MarketAnalysis,
-    quantity: Decimal,
+    quantity: Decimal | None = None,
     stop_loss: Decimal | None = None,
 ) -> AutomationResult:
     if not settings.paper_trading_only:
@@ -80,7 +85,38 @@ async def _execute_ai_analysis(
             reason=analysis.reason,
             order_id=None,
             status="no_trade",
+            rsi=analysis.rsi,
+            trend=analysis.trend,
         )
+
+    # Auto stop-loss if not provided (1.5% default for medium risk)
+    if stop_loss is None:
+        if analysis.signal == "BUY":
+            stop_loss = price * Decimal("0.985")  # 1.5% below
+        else:
+            stop_loss = price * Decimal("1.015")  # 1.5% above
+
+    # Auto position sizing if quantity not provided
+    if quantity is None:
+        try:
+            quantity = await calculate_position_size(
+                db=db,
+                trading_account_id=account.id,
+                entry_price=price,
+                stop_loss=stop_loss,
+                side=analysis.signal.lower(),
+            )
+        except ValueError as e:
+            await db.rollback()
+            return AutomationResult(
+                signal=analysis.signal,
+                confidence=analysis.confidence,
+                reason=f"{analysis.reason} | Position sizing failed: {e}",
+                order_id=None,
+                status="risk_blocked",
+                rsi=analysis.rsi,
+                trend=analysis.trend,
+            )
 
     try:
         order = await execute_paper_order(
@@ -92,9 +128,17 @@ async def _execute_ai_analysis(
             price=price,
             stop_loss=stop_loss,
         )
-    except ValueError:
+    except ValueError as e:
         await db.rollback()
-        raise
+        return AutomationResult(
+            signal=analysis.signal,
+            confidence=analysis.confidence,
+            reason=f"{analysis.reason} | Risk blocked: {e}",
+            order_id=None,
+            status="risk_blocked",
+            rsi=analysis.rsi,
+            trend=analysis.trend,
+        )
 
     return AutomationResult(
         signal=analysis.signal,
@@ -102,6 +146,10 @@ async def _execute_ai_analysis(
         reason=analysis.reason,
         order_id=str(order.id),
         status="paper_order_created",
+        quantity=quantity,
+        stop_loss=stop_loss,
+        rsi=analysis.rsi,
+        trend=analysis.trend,
     )
 
 
@@ -109,10 +157,8 @@ async def analyze_ai_market_signal(
     provider,
     symbol: str,
     timeframe: str,
-    period: int,
+    period: int = 20,
 ):
-    from app.ai.analyzer import analyze_market_history
-
     await provider.get_price(symbol)
     history = provider.get_price_history(symbol)
 
@@ -130,12 +176,10 @@ async def run_ai_market_driven_paper_trade(
     provider,
     symbol: str,
     timeframe: str,
-    period: int,
-    quantity: Decimal,
+    period: int = 20,
+    quantity: Decimal | None = None,
     stop_loss: Decimal | None = None,
 ) -> AutomationResult:
-    from app.ai.analyzer import analyze_market_history
-
     price = await provider.get_price(symbol)
     history = provider.get_price_history(symbol)
 

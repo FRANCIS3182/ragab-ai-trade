@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -26,11 +26,75 @@ async def get_or_create_risk_setting(
     if setting is None:
         setting = RiskSetting(
             trading_account_id=trading_account_id,
+            max_risk_per_trade_pct=Decimal("1.0"),
+            max_daily_loss_pct=Decimal("3.0"),
+            max_open_positions=5,
         )
         db.add(setting)
         await db.flush()
 
     return setting
+
+
+async def calculate_position_size(
+    db: AsyncSession,
+    trading_account_id: UUID,
+    entry_price: Decimal,
+    stop_loss: Decimal,
+    side: str,
+) -> Decimal:
+    """
+    Calculate position size so that the risk (distance to stop) equals
+    max_risk_per_trade_pct of current equity.
+    """
+    if entry_price <= 0 or stop_loss <= 0:
+        raise ValueError("entry_price and stop_loss must be positive")
+
+    if side == "buy" and stop_loss >= entry_price:
+        raise ValueError("Buy stop-loss must be below entry price")
+    if side == "sell" and stop_loss <= entry_price:
+        raise ValueError("Sell stop-loss must be above entry price")
+
+    setting = await get_or_create_risk_setting(db, trading_account_id)
+
+    account_result = await db.execute(
+        select(TradingAccount).where(TradingAccount.id == trading_account_id)
+    )
+    account = account_result.scalar_one_or_none()
+    if account is None:
+        raise ValueError("Trading account not found")
+
+    balance = account.balance or Decimal("0")
+
+    unrealized_result = await db.execute(
+        select(
+            func.coalesce(func.sum(Position.unrealized_pnl), Decimal("0"))
+        ).where(
+            Position.trading_account_id == account.id,
+            Position.status == "open",
+        )
+    )
+    unrealized_pnl = unrealized_result.scalar_one() or Decimal("0")
+    equity = balance + unrealized_pnl
+
+    if equity <= 0:
+        raise ValueError("Account equity is zero or negative")
+
+    max_risk_amount = equity * setting.max_risk_per_trade_pct / Decimal("100")
+    risk_per_unit = abs(entry_price - stop_loss)
+
+    if risk_per_unit == 0:
+        raise ValueError("Stop distance cannot be zero")
+
+    size = max_risk_amount / risk_per_unit
+
+    # Round down to avoid exceeding risk
+    size = size.quantize(Decimal("0.0001"), rounding=ROUND_DOWN)
+
+    if size <= 0:
+        raise ValueError("Calculated position size is too small")
+
+    return size
 
 
 async def validate_paper_order_risk(

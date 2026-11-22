@@ -15,6 +15,7 @@ from app.services.ai_trading import (
     run_ai_market_driven_paper_trade,
     analyze_ai_market_signal,
 )
+from app.services.automation_engine import AutomationEngine
 
 router = APIRouter()
 
@@ -28,9 +29,9 @@ class MarketPriceRequest(BaseModel):
 class MarketDrivenAutomationRequest(BaseModel):
     trading_account_id: UUID
     symbol: str = Field(min_length=2, max_length=30)
-    timeframe: str = Field(min_length=1, max_length=10)
-    period: int = Field(gt=0, le=200)
-    quantity: Decimal = Field(gt=0)
+    timeframe: str = Field(default="15m", min_length=1, max_length=10)
+    period: int = Field(default=20, gt=0, le=200)
+    quantity: Decimal | None = Field(default=None, gt=0)
     stop_loss: Decimal | None = Field(default=None, gt=0)
 
 
@@ -40,8 +41,16 @@ class AutomationRequest(BaseModel):
     timeframe: str = Field(min_length=1, max_length=10)
     price: Decimal = Field(gt=0)
     moving_average: Decimal = Field(gt=0)
-    quantity: Decimal = Field(gt=0)
+    quantity: Decimal | None = Field(default=None, gt=0)
     stop_loss: Decimal | None = Field(default=None, gt=0)
+
+
+class StartJobRequest(BaseModel):
+    trading_account_id: UUID
+    symbol: str = Field(min_length=2, max_length=30)
+    timeframe: str = Field(default="15m", min_length=1, max_length=10)
+    period: int = Field(default=20, gt=0, le=200)
+    interval_seconds: int = Field(default=300, ge=60, le=3600)
 
 
 @router.post("/run")
@@ -62,10 +71,7 @@ async def run_automation(
     account = result.scalar_one_or_none()
 
     if not account:
-        raise HTTPException(
-            status_code=404,
-            detail="Paper trading account not found",
-        )
+        raise HTTPException(status_code=404, detail="Paper trading account not found")
 
     try:
         automation = await run_ai_paper_trade(
@@ -79,10 +85,7 @@ async def run_automation(
             stop_loss=payload.stop_loss,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=str(exc),
-        )
+        raise HTTPException(status_code=503, detail=str(exc))
 
     return {
         "signal": automation.signal,
@@ -90,6 +93,8 @@ async def run_automation(
         "reason": automation.reason,
         "order_id": automation.order_id,
         "status": automation.status,
+        "quantity": str(automation.quantity) if automation.quantity else None,
+        "stop_loss": str(automation.stop_loss) if automation.stop_loss else None,
         "execution": "paper_only",
     }
 
@@ -137,6 +142,9 @@ async def get_market_signal(
         "signal": analysis.signal,
         "confidence": analysis.confidence,
         "reason": analysis.reason,
+        "rsi": analysis.rsi,
+        "trend": analysis.trend,
+        "volatility": analysis.volatility,
         "execution": "paper_only",
     }
 
@@ -160,10 +168,7 @@ async def run_market_driven_automation(
     account = result.scalar_one_or_none()
 
     if not account:
-        raise HTTPException(
-            status_code=404,
-            detail="Paper trading account not found",
-        )
+        raise HTTPException(status_code=404, detail="Paper trading account not found")
 
     provider = request.app.state.paper_market_data
 
@@ -179,10 +184,7 @@ async def run_market_driven_automation(
             stop_loss=payload.stop_loss,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=str(exc),
-        )
+        raise HTTPException(status_code=503, detail=str(exc))
 
     return {
         "signal": automation.signal,
@@ -190,5 +192,90 @@ async def run_market_driven_automation(
         "reason": automation.reason,
         "order_id": automation.order_id,
         "status": automation.status,
+        "quantity": str(automation.quantity) if automation.quantity else None,
+        "stop_loss": str(automation.stop_loss) if automation.stop_loss else None,
+        "rsi": automation.rsi,
+        "trend": automation.trend,
         "execution": "paper_only",
     }
+
+
+# ---------- Continuous Automation Control ----------
+
+@router.post("/jobs/start")
+async def start_automation_job(
+    payload: StartJobRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(TradingAccount).where(
+            TradingAccount.id == payload.trading_account_id,
+            TradingAccount.user_id == current_user.id,
+            TradingAccount.is_active.is_(True),
+            TradingAccount.mode == "paper",
+        )
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Paper trading account not found")
+
+    engine: AutomationEngine = request.app.state.automation_engine
+    key = engine.add_job(
+        trading_account_id=payload.trading_account_id,
+        symbol=payload.symbol,
+        timeframe=payload.timeframe,
+        period=payload.period,
+        interval_seconds=payload.interval_seconds,
+    )
+
+    return {"status": "started", "job_key": key}
+
+
+@router.get("/jobs")
+async def list_automation_jobs(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    engine: AutomationEngine = request.app.state.automation_engine
+    return {"jobs": engine.list_jobs()}
+
+
+@router.post("/jobs/{job_key}/stop")
+async def stop_automation_job(
+    job_key: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    engine: AutomationEngine = request.app.state.automation_engine
+    ok = engine.disable_job(job_key)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "stopped", "job_key": job_key}
+
+
+@router.post("/jobs/{job_key}/enable")
+async def enable_automation_job(
+    job_key: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    engine: AutomationEngine = request.app.state.automation_engine
+    ok = engine.enable_job(job_key)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "enabled", "job_key": job_key}
+
+
+@router.delete("/jobs/{job_key}")
+async def delete_automation_job(
+    job_key: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    engine: AutomationEngine = request.app.state.automation_engine
+    ok = engine.remove_job(job_key)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "deleted", "job_key": job_key}
