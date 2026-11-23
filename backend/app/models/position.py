@@ -56,6 +56,11 @@ class Position(Base):
         nullable=True,
     )
 
+    take_profit: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 8),
+        nullable=True,
+    )
+
     unrealized_pnl: Mapped[Decimal] = mapped_column(
         Numeric(20, 8),
         nullable=False,
