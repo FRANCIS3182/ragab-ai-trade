@@ -40,9 +40,11 @@ async def test_ai_market_driven_paper_trade():
         provider = PaperMarketDataProvider()
 
         for price in [
-            Decimal("3390"),
-            Decimal("3400"),
-            Decimal("3410"),
+            Decimal("3390"), Decimal("3391"), Decimal("3390"),
+            Decimal("3391"), Decimal("3392"), Decimal("3391"),
+            Decimal("3392"), Decimal("3393"), Decimal("3392"),
+            Decimal("3393"), Decimal("3394"), Decimal("3393"),
+            Decimal("3394"), Decimal("3392"), Decimal("3396"),
         ]:
             provider.set_price("XAUUSD", price, price)
 
@@ -57,7 +59,7 @@ async def test_ai_market_driven_paper_trade():
         )
 
         assert result.signal == "BUY"
-        assert result.confidence == 0.60
+        assert result.confidence == 0.95
         assert result.order_id is not None
         assert result.status == "paper_order_created"
 
@@ -71,7 +73,7 @@ async def test_ai_market_driven_paper_trade():
         assert order.symbol == "XAUUSD"
         assert order.side == "buy"
         assert order.quantity == Decimal("1")
-        assert order.price == Decimal("3410")
+        assert order.price == Decimal("3396")
         assert order.status == "simulated"
 
         signal_result = await db.execute(

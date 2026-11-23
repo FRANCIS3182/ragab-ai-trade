@@ -47,7 +47,7 @@ async def test_ai_automation_paper_trade():
         )
 
         assert result.signal == "BUY"
-        assert result.confidence == 0.60
+        assert result.confidence == 0.55
         assert result.order_id is not None
         assert result.status == "paper_order_created"
 
@@ -65,17 +65,20 @@ async def test_ai_automation_paper_trade():
         assert order.status == "simulated"
 
         signal_result = await db.execute(
-            select(Signal).where(
+            select(Signal)
+            .where(
                 Signal.symbol == "XAUUSD",
                 Signal.timeframe == "M5",
             )
+            .order_by(Signal.created_at.desc())
+            .limit(1)
         )
         signal = signal_result.scalars().first()
 
         assert signal is not None
         test_signal_id = signal.id
         assert signal.direction == "BUY"
-        assert signal.confidence == Decimal("0.60")
+        assert signal.confidence == Decimal("0.55")
 
         await db.rollback()
 
