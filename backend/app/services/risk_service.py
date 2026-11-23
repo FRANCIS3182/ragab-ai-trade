@@ -41,6 +41,7 @@ async def validate_paper_order_risk(
     quantity: Decimal,
     price: Decimal | None = None,
     stop_loss: Decimal | None = None,
+    take_profit: Decimal | None = None,
 ) -> None:
     if quantity <= 0:
         raise ValueError("Order quantity must be greater than zero")
@@ -144,6 +145,22 @@ async def validate_paper_order_risk(
                 "Trade risk exceeds the maximum allowed risk of "
                 f"{setting.max_risk_per_trade_pct}% "
                 f"(${maximum_risk:.2f})"
+            )
+
+    if take_profit is not None:
+        if price is None:
+            raise ValueError(
+                "Entry price is required when take-profit is provided"
+            )
+
+        if side == "buy" and take_profit <= price:
+            raise ValueError(
+                "Buy take-profit must be above the entry price"
+            )
+
+        if side == "sell" and take_profit >= price:
+            raise ValueError(
+                "Sell take-profit must be below the entry price"
             )
 
     open_positions_result = await db.execute(

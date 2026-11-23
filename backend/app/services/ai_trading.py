@@ -28,6 +28,7 @@ async def run_ai_paper_trade(
     moving_average: Decimal,
     quantity: Decimal,
     stop_loss: Decimal | None = None,
+    take_profit: Decimal | None = None,
 ) -> AutomationResult:
     analysis = analyze_market(
         symbol=symbol,
@@ -45,6 +46,7 @@ async def run_ai_paper_trade(
         analysis=analysis,
         quantity=quantity,
         stop_loss=stop_loss,
+        take_profit=take_profit,
     )
 
 
@@ -57,6 +59,7 @@ async def _execute_ai_analysis(
     analysis: MarketAnalysis,
     quantity: Decimal,
     stop_loss: Decimal | None = None,
+    take_profit: Decimal | None = None,
 ) -> AutomationResult:
     if not settings.paper_trading_only:
         raise ValueError("Paper trading safety flag must be enabled")
@@ -89,6 +92,7 @@ async def _execute_ai_analysis(
             symbol=symbol,
             side=analysis.signal.lower(),
             quantity=quantity,
+            take_profit=take_profit,
             price=price,
             stop_loss=stop_loss,
         )

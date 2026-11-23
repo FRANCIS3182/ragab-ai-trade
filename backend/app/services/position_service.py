@@ -51,10 +51,17 @@ async def update_position_price(
 
     position.current_price = current_price
 
-    if is_stop_loss_triggered(
-        side=position.side,
-        stop_loss=position.stop_loss,
-        current_price=current_price,
+    if (
+        is_stop_loss_triggered(
+            side=position.side,
+            stop_loss=position.stop_loss,
+            current_price=current_price,
+        )
+        or is_take_profit_triggered(
+            side=position.side,
+            take_profit=position.take_profit,
+            current_price=current_price,
+        )
     ):
         realized = await close_position(
             db=db,
@@ -242,5 +249,22 @@ def is_stop_loss_triggered(
 
     if side == "sell":
         return current_price >= stop_loss
+
+    raise ValueError("Position side must be buy or sell")
+
+
+def is_take_profit_triggered(
+    side: str,
+    take_profit: Decimal | None,
+    current_price: Decimal,
+) -> bool:
+    if take_profit is None:
+        return False
+
+    if side == "buy":
+        return current_price >= take_profit
+
+    if side == "sell":
+        return current_price <= take_profit
 
     raise ValueError("Position side must be buy or sell")

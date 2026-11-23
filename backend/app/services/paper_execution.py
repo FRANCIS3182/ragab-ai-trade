@@ -22,6 +22,7 @@ async def execute_paper_order(
     quantity: Decimal,
     price: Decimal | None = None,
     stop_loss: Decimal | None = None,
+    take_profit: Decimal | None = None,
 ) -> Order:
     if not settings.paper_trading_only:
         raise ValueError(
@@ -38,6 +39,7 @@ async def execute_paper_order(
         quantity=quantity,
         price=price,
         stop_loss=stop_loss,
+        take_profit=take_profit,
     )
 
     order = Order(
@@ -47,6 +49,7 @@ async def execute_paper_order(
         quantity=quantity,
         price=price,
         stop_loss=stop_loss,
+        take_profit=take_profit,
         status="simulated",
     )
 
@@ -70,6 +73,9 @@ async def execute_paper_order(
 
             if stop_loss is not None:
                 existing_position.stop_loss = stop_loss
+
+            if take_profit is not None:
+                existing_position.take_profit = take_profit
         else:
             opposite_side = "sell" if side == "buy" else "buy"
 
@@ -106,6 +112,7 @@ async def execute_paper_order(
                     entry_price=price,
                     current_price=price,
                     stop_loss=stop_loss,
+                    take_profit=take_profit,
                     unrealized_pnl=Decimal("0"),
                     realized_pnl=Decimal("0"),
                     status="open",
